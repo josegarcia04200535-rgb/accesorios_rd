@@ -104,7 +104,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Gestionar Producto</h5>
+                <h5 class="modal-title" id="tituloModal">Gestionar Producto</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body text-center">
@@ -118,8 +118,9 @@
                 <input type="number" id="add-stock" class="form-control mb-2" placeholder="Cantidad en Stock">
                 <input type="file" id="add-img-file" class="form-control" accept="image/*" onchange="previewImagen(event)">
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary w-100" onclick="guardarProducto()">Guardar Producto</button>
+            <div class="modal-footer flex-column">
+                <button class="btn btn-primary w-100 mb-2" onclick="guardarProducto()">Guardar Cambios</button>
+                <button id="btn-eliminar-prod" class="btn btn-outline-danger btn-sm w-100" style="display: none;" onclick="eliminarProducto()">Eliminar de Inventario</button>
             </div>
         </div>
     </div>
@@ -159,12 +160,14 @@
     });
 
     function abrirModalProd() {
+        document.getElementById('tituloModal').innerText = "Nuevo Producto";
         document.getElementById('edit-id').value = "";
         document.getElementById('add-nombre').value = "";
         document.getElementById('add-costo').value = "";
         document.getElementById('add-precio').value = "";
         document.getElementById('add-stock').value = "";
         document.getElementById('img-edit-preview').style.display = "none";
+        document.getElementById('btn-eliminar-prod').style.display = "none";
         base64Img = "";
         modalProd.show();
     }
@@ -194,18 +197,47 @@
 
     function editarProducto(id) {
         const p = inventario.find(x => x.id === id);
+        document.getElementById('tituloModal').innerText = "Editar Producto";
         document.getElementById('edit-id').value = p.id;
         document.getElementById('add-nombre').value = p.nombre;
         document.getElementById('add-costo').value = p.costo;
         document.getElementById('add-precio').value = p.precio;
         document.getElementById('add-stock').value = p.stock;
+        document.getElementById('btn-eliminar-prod').style.display = "block";
         if(p.img) {
             const prev = document.getElementById('img-edit-preview');
             prev.src = p.img;
             prev.style.display = "block";
             base64Img = p.img;
+        } else {
+            document.getElementById('img-edit-preview').style.display = "none";
+            base64Img = "";
         }
         modalProd.show();
+    }
+
+    // --- NUEVA FUNCIÓN: ELIMINAR PRODUCTO ---
+    function eliminarProducto() {
+        const id = document.getElementById('edit-id').value;
+        if(!id) return;
+
+        Swal.fire({
+            title: '¿Eliminar producto?',
+            text: "Esta acción no se puede deshacer.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#2d3436',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                db.ref('inventario/' + id).remove().then(() => {
+                    modalProd.hide();
+                    Swal.fire('Eliminado', 'El producto ha sido borrado.', 'success');
+                });
+            }
+        });
     }
 
     function render() {
@@ -271,7 +303,6 @@
         `).join('');
     }
 
-    // --- FUNCIÓN MEJORADA: PROCESAR VENTA CON WHATSAPP Y PDF PROFESIONAL ---
     function procesarVenta() {
         const idx = document.getElementById('select-producto').value;
         const cant = parseInt(document.getElementById('input-cantidad').value);
@@ -313,29 +344,20 @@
                     const mensaje = `*ACCESORIOS RD* ⌚%0A*Factura # ${numFactura}*%0A---%0A*Cliente:* ${cliente}%0A*Producto:* ${p.nombre}%0A*Cantidad:* ${cant}%0A*Total:* RD$ ${totalVenta.toLocaleString()}%0A*Fecha:* ${fechaActual}%0A---%0A¡Gracias por su preferencia!`;
                     window.open(`https://wa.me/${telefono}?text=${mensaje}`, '_blank');
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
-                    
                     const { jsPDF } = window.jspdf;
-                    const doc = new jsPDF({ unit: 'mm', format: [80, 150] }); // Formato térmico elegante
-                    
-                    // Encabezado
+                    const doc = new jsPDF({ unit: 'mm', format: [80, 150] });
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(14);
-                    doc.setTextColor(45, 52, 54);
                     doc.text("ACCESORIOS RD", 40, 12, {align: 'center'});
-                    
                     doc.setFontSize(8);
                     doc.setFont("helvetica", "normal");
                     doc.text("Elegancia y Estilo en tus manos", 40, 17, {align: 'center'});
                     doc.line(10, 20, 70, 20);
-
-                    // Info Factura
                     doc.setFont("helvetica", "bold");
                     doc.text(`FACTURA: #${numFactura}`, 10, 28);
                     doc.setFont("helvetica", "normal");
                     doc.text(`Fecha: ${fechaActual}`, 10, 33);
                     doc.text(`Cliente: ${cliente}`, 10, 38);
-                    
-                    // Tabla de Productos
                     doc.autoTable({
                         startY: 42,
                         margin: { left: 5, right: 5 },
@@ -346,22 +368,12 @@
                         styles: { fontSize: 8 },
                         columnStyles: { 2: { halign: 'right' } }
                     });
-
-                    // Totales
                     const finalY = doc.lastAutoTable.finalY + 10;
                     doc.line(40, finalY - 5, 75, finalY - 5);
                     doc.setFontSize(10);
                     doc.setFont("helvetica", "bold");
                     doc.text("TOTAL RD$", 40, finalY);
                     doc.text(`${totalVenta.toLocaleString()}`, 75, finalY, { align: 'right' });
-
-                    // Pie de página
-                    doc.setFontSize(8);
-                    doc.setFont("helvetica", "italic");
-                    doc.setTextColor(100);
-                    doc.text("¡Gracias por su compra!", 40, finalY + 15, { align: 'center' });
-                    doc.text("Santo Domingo, R.D.", 40, finalY + 20, { align: 'center' });
-
                     doc.save(`Factura_${numFactura}_${cliente}.pdf`);
                 }
             });
@@ -373,15 +385,11 @@
         const doc = new jsPDF();
         doc.setFontSize(16);
         doc.text("REPORTE DE VENTAS - ACCESORIOS RD", 10, 15);
-        doc.setFontSize(10);
-        doc.text(`Generado el: ${new Date().toLocaleString()}`, 10, 22);
-        
         doc.autoTable({
             startY: 30,
             head: [['Fecha', 'Producto', 'Ganancia (RD$)']],
             body: ventas.map(v => [new Date(v.fecha).toLocaleDateString(), v.producto, v.ganancia.toLocaleString()]),
-            headStyles: { fillColor: [45, 52, 54] },
-            alternateRowStyles: { fillColor: [245, 245, 245] }
+            headStyles: { fillColor: [45, 52, 54] }
         });
         doc.save("Reporte_Mensual_AccesoriosRD.pdf");
     }
